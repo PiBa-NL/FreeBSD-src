@@ -2472,6 +2472,8 @@ init386(int first)
 	else
 		init_static_kenv(NULL, 0);
 
+	identify_hypervisor();
+
 	/* Init basic tunables, hz etc */
 	init_param1();
 
@@ -2577,7 +2579,7 @@ init386(int first)
 	    GSEL(GCODE_SEL, SEL_KPL));
 #endif
 #ifdef XENHVM
-	setidt(IDT_EVTCHN, &IDTVEC(xen_intr_upcall), SDT_SYS386IGT, SEL_UPL,
+	setidt(IDT_EVTCHN, &IDTVEC(xen_intr_upcall), SDT_SYS386IGT, SEL_KPL,
 	    GSEL(GCODE_SEL, SEL_KPL));
 #endif
 
@@ -3136,7 +3138,6 @@ static int
 set_fpcontext(struct thread *td, mcontext_t *mcp, char *xfpustate,
     size_t xfpustate_len)
 {
-	union savefpu *fpstate;
 	int error;
 
 	if (mcp->mc_fpformat == _MC_FPFMT_NODEV)
@@ -3150,10 +3151,8 @@ set_fpcontext(struct thread *td, mcontext_t *mcp, char *xfpustate,
 		error = 0;
 	} else if (mcp->mc_ownedfp == _MC_FPOWNED_FPU ||
 	    mcp->mc_ownedfp == _MC_FPOWNED_PCB) {
-		fpstate = (union savefpu *)&mcp->mc_fpstate;
-		if (cpu_fxsr)
-			fpstate->sv_xmm.sv_env.en_mxcsr &= cpu_mxcsr_mask;
-		error = npxsetregs(td, fpstate, xfpustate, xfpustate_len);
+		error = npxsetregs(td, (union savefpu *)&mcp->mc_fpstate,
+		    xfpustate, xfpustate_len);
 	} else
 		return (EINVAL);
 	return (error);

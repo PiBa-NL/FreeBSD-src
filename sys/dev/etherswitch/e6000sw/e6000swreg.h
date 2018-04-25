@@ -90,7 +90,10 @@ struct atu_opt {
 #define	SWITCH_ID			0x3
 #define	PORT_CONTROL			0x4
 #define	PORT_CONTROL1			0x5
-#define	PORT_CONTROL1_FID_MASK		0xf
+#define	 PORT_CONTROL1_LAG_PORT		(1 << 14)
+#define	 PORT_CONTROL1_LAG_ID_MASK	0xf
+#define	 PORT_CONTROL1_LAG_ID_SHIFT	8
+#define	 PORT_CONTROL1_FID_MASK		0xf
 #define	PORT_VLAN_MAP			0x6
 #define	PORT_VID			0x7
 #define	PORT_CONTROL2			0x8
@@ -103,7 +106,11 @@ struct atu_opt {
 #define	PORT_VID_DEF_VID_MASK		0xfff
 #define	PORT_VID_PRIORITY_MASK		0xc00
 
-#define	PORT_CONTROL_ENABLE		0x0003
+#define	PORT_CONTROL_DISABLED		0
+#define	PORT_CONTROL_BLOCKING		1
+#define	PORT_CONTROL_LEARNING		2
+#define	PORT_CONTROL_FORWARDING		3
+#define	PORT_CONTROL_ENABLE		3
 #define	PORT_CONTROL_FRAME		0x0300
 #define	PORT_CONTROL_EGRESS		0x3000
 #define	PORT_CONTROL2_DOT1Q		0x0c00
@@ -202,9 +209,14 @@ struct atu_opt {
 #define	MGMT_EN_2x			2
 #define	MGMT_EN_0x			3
 #define	SWITCH_MGMT			5
+#define	LAG_MASK			7
+#define	LAG_MAPPING			8
 #define	ATU_STATS			14
 
 #define	MGMT_EN_ALL			0xffff
+#define	LAG_UPDATE			(1 << 15)
+#define	LAG_MASKNUM_SHIFT		12
+#define	LAGID_SHIFT			11
 
 /* SWITCH_MGMT fields */
 
@@ -220,25 +232,48 @@ struct atu_opt {
 #define	ATU_STATS_BIN			14
 #define	ATU_STATS_FLAG			12
 
+/* Offset of SMI registers in multi-chip setup. */
+#define	SMI_CMD				0
+#define	SMI_DATA			1
+
 /*
- * PHY registers accessed via 'Switch Global Registers' (REG_GLOBAL2).
+ * 'Switch Global Registers 2' (REG_GLOBAL2).
  */
+
+/* EEPROM registers */
+#define	EEPROM_CMD			0x14
+#define	 EEPROM_BUSY			(1 << 15)
+#define	 EEPROM_READ_CMD		(4 << 12)
+#define	 EEPROM_WRITE_CMD		(3 << 12)
+#define	 EEPROM_WRITE_EN		(1 << 10)
+#define	 EEPROM_DATA_MASK		0xff
+#define	EEPROM_ADDR			0x15
+
+/* PHY registers */
 #define	SMI_PHY_CMD_REG			0x18
+#define	 SMI_CMD_BUSY			(1 << 15)
+#define	 SMI_CMD_MODE_C22		(1 << 12)
+#define	 SMI_CMD_C22_WRITE		(1 << 10)
+#define	 SMI_CMD_C22_READ		(2 << 10)
+#define	 SMI_CMD_OP_C22_WRITE						\
+	 (SMI_CMD_C22_WRITE | SMI_CMD_BUSY | SMI_CMD_MODE_C22)
+#define	 SMI_CMD_OP_C22_READ						\
+	 (SMI_CMD_C22_READ | SMI_CMD_BUSY | SMI_CMD_MODE_C22)
+#define	 SMI_CMD_C45			(0 << 12)
+#define	 SMI_CMD_C45_ADDR		(0 << 10)
+#define	 SMI_CMD_C45_WRITE		(1 << 10)
+#define	 SMI_CMD_C45_READ		(3 << 10)
+#define	 SMI_CMD_OP_C45_ADDR						\
+	 (SMI_CMD_C45_ADDR | SMI_CMD_BUSY | SMI_CMD_C45)
+#define	 SMI_CMD_OP_C45_WRITE						\
+	 (SMI_CMD_C45_WRITE | SMI_CMD_BUSY | SMI_CMD_C45)
+#define	 SMI_CMD_OP_C45_READ						\
+	 (SMI_CMD_C45_READ | SMI_CMD_BUSY | SMI_CMD_C45)
+#define	 SMI_CMD_DEV_ADDR		5
+#define	 SMI_CMD_DEV_ADDR_MASK		0x3e0
+#define	 SMI_CMD_REG_ADDR_MASK		0x1f
 #define	SMI_PHY_DATA_REG		0x19
-
-#define	PHY_DATA_MASK			0xffff
-
-#define	PHY_CMD_SMI_BUSY		15
-#define	PHY_CMD_MODE			12
-#define	PHY_CMD_MODE_MDIO		1
-#define	PHY_CMD_MODE_XMDIO		0
-#define	PHY_CMD_OPCODE			10
-#define	PHY_CMD_OPCODE_WRITE		1
-#define	PHY_CMD_OPCODE_READ		2
-#define	PHY_CMD_DEV_ADDR		5
-#define	PHY_CMD_DEV_ADDR_MASK		0x3e0
-#define	PHY_CMD_REG_ADDR		0
-#define	PHY_CMD_REG_ADDR_MASK		0x1f
+#define	 PHY_DATA_MASK			0xffff
 
 #define	PHY_PAGE_REG			22
 
@@ -251,12 +286,20 @@ struct atu_opt {
 #define	SCR_AND_MISC_PTR_CFG		0x7000
 #define	SCR_AND_MISC_DATA_CFG_MASK	0xf0
 
+/* SERDES registers. */
+#define	E6000SW_SERDES_DEV		4
+#define	E6000SW_SERDES_PCS_CTL1		0x1000
+#define	E6000SW_SERDES_SGMII_CTL	0x2000
+#define	 E6000SW_SERDES_PDOWN		(1 << 11)
+
 #define	E6000SW_NUM_VLANS		128
-#define	E6000SW_NUM_LAGS		16
+#define	E6000SW_NUM_LAGMASK		8
 #define	E6000SW_NUM_PHY_REGS		29
 #define	E6000SW_MAX_PORTS		11
 #define	E6000SW_DEFAULT_AGETIME		20
 #define	E6000SW_RETRIES			100
 #define	E6000SW_SMI_TIMEOUT		16
+#define	E6000SW_IOBUF_BLKSIZE		(4 * 1024)	/*  4 KiB block */
+#define	E6000SW_IOBUF_SIZE		(64 * 1024)	/* 64 KiB max. */
 
 #endif /* _E6000SWREG_H_ */
